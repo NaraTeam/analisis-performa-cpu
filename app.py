@@ -168,7 +168,7 @@ elif menu == "2️⃣ Pemrosesan & ML":
         else:
             with st.spinner("Menjalankan 2_data_preprocessing.py ..."):
                 # Jalankan skrip preprocessing
-                script1 = os.path.join(BASE_DIR, "src", "2_data_preprocessing.py")
+                script1 = os.path.join(BASE_DIR, "2_data_preprocessing.py")
                 res1 = subprocess.run(["python", script1], capture_output=True, text=True)
                 
             if res1.returncode != 0:
@@ -179,7 +179,7 @@ elif menu == "2️⃣ Pemrosesan & ML":
                     st.code(res1.stdout)
                 
                 with st.spinner("Menjalankan 3_ml_analysis.py ..."):
-                    script2 = os.path.join(BASE_DIR, "src", "3_ml_analysis.py")
+                    script2 = os.path.join(BASE_DIR, "3_ml_analysis.py")
                     res2 = subprocess.run(["python", script2], capture_output=True, text=True)
                     
                 if res2.returncode != 0:
