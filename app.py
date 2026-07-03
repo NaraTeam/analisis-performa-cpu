@@ -1,3 +1,4 @@
+import sys
 import os
 import time
 import subprocess
@@ -174,7 +175,7 @@ elif menu == "2️⃣ Pemrosesan & ML":
             with st.spinner("Menjalankan 2_data_preprocessing.py ..."):
                 # Jalankan skrip preprocessing
                 script1 = os.path.join(BASE_DIR, "2_data_preprocessing.py")
-                res1 = subprocess.run(["python", script1], capture_output=True, text=True)
+                res1 = subprocess.run([sys.executable, script1], capture_output=True, text=True)
                 
             if res1.returncode != 0:
                 st.error("Gagal saat menjalankan Data Preprocessing.")
@@ -185,7 +186,7 @@ elif menu == "2️⃣ Pemrosesan & ML":
                 
                 with st.spinner("Menjalankan 3_ml_analysis.py ..."):
                     script2 = os.path.join(BASE_DIR, "3_ml_analysis.py")
-                    res2 = subprocess.run(["python", script2], capture_output=True, text=True)
+                    res2 = subprocess.run([sys.executable, script2], capture_output=True, text=True)
                     
                 if res2.returncode != 0:
                     st.error("Gagal saat menjalankan Machine Learning Analysis.")
