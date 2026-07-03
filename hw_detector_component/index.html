@@ -106,6 +106,10 @@
           else record['Testing_Phase'] = 'Stress_Testing';
 
           recordedData.push(record);
+          // Prevent memory leak by capping data at 3600 points (1 hour)
+          if (recordedData.length > 3600) {
+            recordedData.shift();
+          }
           document.getElementById("status").innerText = `Recording... (${recordedData.length} data points)`;
         }, 1000);
       }
