@@ -22,17 +22,9 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-if not os.path.exists(os.path.join(BASE_DIR, "2_data_preprocessing.py")):
-    PROJECT_DIR = os.path.join(BASE_DIR, "Evaluasi Optimalisasi Multi-Threading Spesifik", "multithread_eval_project")
-    if os.path.exists(os.path.join(PROJECT_DIR, "2_data_preprocessing.py")):
-        BASE_DIR = PROJECT_DIR
-
-sys.path.append(BASE_DIR)
 try:
-    import importlib
-    prep = importlib.import_module("2_data_preprocessing")
-    ml = importlib.import_module("3_ml_analysis")
+    import data_preprocessing as prep
+    import ml_analysis as ml
 except Exception as e:
     st.error(f"Gagal memuat modul pemrosesan: {e}")
 
@@ -50,43 +42,63 @@ plt.rcParams.update({
 sns.set_style('whitegrid')
 
 # ==============================================================================
-# DETEKSI HARDWARE KLIEN
-# ==============================================================================
-client_hw = hw_detector()
-client_cores = "Unknown"
-client_ram = "Unknown"
-if client_hw:
-    client_cores = client_hw.get("cores", "Unknown")
-    client_ram = client_hw.get("memory", "Unknown")
-
-# ==============================================================================
 # UI SIDEBAR
 # ==============================================================================
 st.sidebar.title("📊 Multi-Thread Eval")
 menu = st.sidebar.radio(
     "Navigasi",
-    ["1️⃣ Unggah & Proses Data", "2️⃣ Dashboard Evaluasi"]
+    ["1️⃣ Rekam Data Klien", "2️⃣ Evaluasi Data CSV"]
 )
 st.sidebar.markdown("---")
-st.sidebar.info("Sistem Evaluasi Optimalisasi Multi-Threading Spesifik pada Aplikasi Web.")
-
-st.sidebar.markdown("### Spesifikasi Perangkat Klien")
-st.sidebar.write(f"**Logical Cores:** {client_cores}")
-st.sidebar.write(f"**RAM:** {client_ram} GB (approx)")
+st.sidebar.info("Sistem Evaluasi Optimalisasi Multi-Threading Spesifik pada Aplikasi Web. Arsitektur Client-Side First.")
 
 # ==============================================================================
-# HALAMAN 1: UNGGAH & PROSES DATA
+# HALAMAN 1: REKAM DATA KLIEN
 # ==============================================================================
-if menu == "1️⃣ Unggah & Proses Data":
-    st.header("📤 Unggah Data Rekaman Thread CPU")
-    st.markdown("Unggah file `thread_performance_log.csv` Anda untuk diproses.")
+if menu == "1️⃣ Rekam Data Klien":
+    st.header("🔴 Rekam Data Beban CPU (Client-Side)")
+    st.markdown("""
+    Aplikasi sekarang menggunakan arsitektur **Client-Side First**. 
+    Silakan gunakan komponen di bawah ini untuk merekam data simulasi beban thread langsung dari browser Anda.
+    
+    **Langkah-langkah:**
+    1. Klik **Start Recording**.
+    2. Tunggu beberapa saat agar data terkumpul (minimal 10-20 detik).
+    3. Klik **Stop & Download CSV** untuk mengakhiri perekaman dan mengunduh hasilnya secara otomatis.
+    4. Pindah ke menu **2️⃣ Evaluasi Data CSV** untuk mengunggah dan menganalisis hasil CSV tersebut.
+    """)
+    st.markdown("---")
+    
+    st.subheader("Kontrol Perekaman")
+    # Render komponen hardware detector yang sekarang juga memiliki UI perekaman
+    client_hw = hw_detector(key="hw_recorder")
+    
+    if client_hw:
+        st.session_state['client_cores'] = client_hw.get("cores", "Unknown")
+        st.session_state['client_ram'] = client_hw.get("memory", "Unknown")
+        
+    st.sidebar.markdown("### Spesifikasi Perangkat Klien")
+    st.sidebar.write(f"**Logical Cores:** {st.session_state.get('client_cores', 'Unknown')}")
+    st.sidebar.write(f"**RAM:** {st.session_state.get('client_ram', 'Unknown')} GB (approx)")
+
+# ==============================================================================
+# HALAMAN 2: EVALUASI DATA CSV
+# ==============================================================================
+elif menu == "2️⃣ Evaluasi Data CSV":
+    
+    st.sidebar.markdown("### Spesifikasi Perangkat Klien")
+    st.sidebar.write(f"**Logical Cores:** {st.session_state.get('client_cores', 'Unknown')}")
+    st.sidebar.write(f"**RAM:** {st.session_state.get('client_ram', 'Unknown')} GB (approx)")
+
+    st.header("📤 Unggah & Evaluasi Data")
+    st.markdown("Unggah file `thread_performance_log.csv` yang baru saja Anda unduh dari halaman **Rekam Data Klien**.")
     
     uploaded_file = st.file_uploader("Pilih file CSV", type="csv")
     
     if uploaded_file is not None:
         try:
             df = pd.read_csv(uploaded_file, encoding='utf-8')
-            st.success("File berhasil diunggah!")
+            st.success("File berhasil diunggah! Memulai pemrosesan...")
             
             with st.spinner("Membersihkan data & membuat fitur turunan..."):
                 kolom_thread = prep.identifikasi_kolom_thread(df)
@@ -100,22 +112,15 @@ if menu == "1️⃣ Unggah & Proses Data":
                 
             st.session_state['ml_df'] = df
             st.session_state['kolom_thread'] = kolom_thread
-            st.success("Pemrosesan & ML selesai! Silakan buka halaman **Dashboard Evaluasi**.")
+            st.success("Pemrosesan & ML selesai! Menampilkan hasil di bawah.")
             
-            with st.expander("Lihat Sampel Data Hasil Pemrosesan"):
-                st.dataframe(df.head())
         except Exception as e:
             st.error(f"Terjadi kesalahan saat memproses data: {e}")
 
-# ==============================================================================
-# HALAMAN 2: DASHBOARD EVALUASI
-# ==============================================================================
-elif menu == "2️⃣ Dashboard Evaluasi":
-    st.header("📈 Dashboard Evaluasi Multi-Threading")
+    st.markdown("---")
     
-    if 'ml_df' not in st.session_state:
-        st.warning("Data belum tersedia. Unggah dan proses data di menu **Unggah & Proses Data** terlebih dahulu.")
-    else:
+    if 'ml_df' in st.session_state:
+        st.header("📈 Dashboard Evaluasi Multi-Threading")
         df = st.session_state['ml_df']
         kolom_thread = st.session_state['kolom_thread']
         
@@ -282,3 +287,4 @@ elif menu == "2️⃣ Dashboard Evaluasi":
                 * **Boxplot Distribusi:** Idealnya, semua kotak untuk setiap thread berada di tingkat yang sama. Jika satu kotak (thread) jauh lebih tinggi/panjang ke atas daripada yang lain, itu indikasi kuat adanya *Bottleneck*!
                 * **Heatmap Klaster K-Means:** Menunjukkan proporsi waktu CPU Anda di fase tersebut. 'Beban Merata' (gelap di kolom Beban Merata) berarti aplikasi sangat dioptimalkan untuk *Multi-threading*.
                 """)
+

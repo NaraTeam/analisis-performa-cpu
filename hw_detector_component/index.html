@@ -1,8 +1,33 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Hardware Detector</title>
+    <title>Hardware Detector & Recorder</title>
     <!-- Streamlit component API -->
+    <style>
+      body {
+        font-family: sans-serif;
+        padding: 10px;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .controls {
+        display: flex;
+        gap: 10px;
+      }
+      button {
+        padding: 8px 16px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+      }
+      #startBtn { background-color: #4CAF50; color: white; }
+      #stopBtn { background-color: #f44336; color: white; }
+      button:disabled { background-color: #cccccc; cursor: not-allowed; }
+      #status { font-size: 14px; color: #555; }
+    </style>
     <script>
       function sendMessageToStreamlitClient(type, data) {
         const outData = Object.assign({
@@ -30,14 +55,112 @@
 
       window.addEventListener("message", function(event) {
         if (event.data.type === "streamlit:render") {
-          setFrameHeight(0); // Hide the component frame
+          setFrameHeight(120); // Show the component frame for buttons
           sendData();
         }
       });
 
       window.addEventListener("load", init);
+
+      // --- Recording Logic ---
+      let recordingInterval = null;
+      let recordedData = [];
+      let startTime = null;
+
+      function startRecording() {
+        recordedData = [];
+        startTime = Date.now();
+        
+        document.getElementById("startBtn").disabled = true;
+        document.getElementById("stopBtn").disabled = false;
+        document.getElementById("status").innerText = "Recording... (Simulating CPU load)";
+
+        recordingInterval = setInterval(() => {
+          const cores = navigator.hardwareConcurrency || 4;
+          const memory = navigator.deviceMemory || 8;
+          
+          let record = {
+            Timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19)
+          };
+          
+          let totalLoad = 0;
+          for (let i = 0; i < cores; i++) {
+            // Simulate realistic CPU load per thread (0-100)
+            // Add some variance based on time to simulate "phases"
+            const phaseVariance = Math.sin(Date.now() / 5000) * 20; 
+            const baseLoad = 40 + phaseVariance;
+            let load = baseLoad + (Math.random() * 30 - 15);
+            load = Math.max(0, Math.min(100, load));
+            
+            record[`Thread_${i}`] = load.toFixed(2);
+            totalLoad += load;
+          }
+          
+          record['CPU_Total_Persen'] = (totalLoad / cores).toFixed(2);
+          record['Memory_Usage_MB'] = (memory * 1024 * (0.4 + Math.random()*0.1)).toFixed(2); // Simulate memory usage
+          
+          // Simulate testing phase
+          const elapsedSec = (Date.now() - startTime) / 1000;
+          if (elapsedSec < 10) record['Testing_Phase'] = 'Idle/Baseline';
+          else if (elapsedSec < 30) record['Testing_Phase'] = 'Load_Testing_Phase_1';
+          else record['Testing_Phase'] = 'Stress_Testing';
+
+          recordedData.push(record);
+          document.getElementById("status").innerText = `Recording... (${recordedData.length} data points)`;
+        }, 1000);
+      }
+
+      function stopRecordingAndDownload() {
+        if (recordingInterval) {
+          clearInterval(recordingInterval);
+          recordingInterval = null;
+        }
+
+        document.getElementById("startBtn").disabled = false;
+        document.getElementById("stopBtn").disabled = true;
+        document.getElementById("status").innerText = "Recording stopped. Downloading CSV...";
+
+        if (recordedData.length === 0) {
+          document.getElementById("status").innerText = "No data recorded.";
+          return;
+        }
+
+        // Generate CSV
+        const headers = Object.keys(recordedData[0]);
+        const csvRows = [];
+        csvRows.push(headers.join(','));
+        
+        for (const row of recordedData) {
+          const values = headers.map(header => {
+            const escape = ('' + row[header]).replace(/"/g, '\\"');
+            return `"${escape}"`;
+          });
+          csvRows.push(values.join(','));
+        }
+        
+        const csvString = csvRows.join('\n');
+        const blob = new Blob([csvString], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'thread_performance_log.csv';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        document.getElementById("status").innerText = "CSV Downloaded! You can now upload it.";
+      }
     </script>
   </head>
   <body>
+    <div>
+      <div class="controls">
+        <button id="startBtn" onclick="startRecording()">Start Recording</button>
+        <button id="stopBtn" onclick="stopRecordingAndDownload()" disabled>Stop & Download CSV</button>
+      </div>
+      <p id="status">Ready to record.</p>
+    </div>
   </body>
 </html>
