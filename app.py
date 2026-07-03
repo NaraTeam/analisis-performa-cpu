@@ -1,17 +1,16 @@
 import sys
 import os
 import time
-import subprocess
 from datetime import datetime
-import csv
 
 import pandas as pd
 import numpy as np
-import psutil
 import streamlit as st
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import seaborn as sns
+
+from hw_detector_component import hw_detector
 
 # ==============================================================================
 # KONFIGURASI UMUM
@@ -29,10 +28,13 @@ if not os.path.exists(os.path.join(BASE_DIR, "2_data_preprocessing.py")):
     if os.path.exists(os.path.join(PROJECT_DIR, "2_data_preprocessing.py")):
         BASE_DIR = PROJECT_DIR
 
-DATA_DIR = os.path.join(BASE_DIR, "data")
-RAW_CSV = os.path.join(DATA_DIR, "thread_performance_log.csv")
-CLEAN_CSV = os.path.join(DATA_DIR, "dataset_bersih.csv")
-ML_CSV = os.path.join(DATA_DIR, "dataset_dengan_label_ml.csv")
+sys.path.append(BASE_DIR)
+try:
+    import importlib
+    prep = importlib.import_module("2_data_preprocessing")
+    ml = importlib.import_module("3_ml_analysis")
+except Exception as e:
+    st.error(f"Gagal memuat modul pemrosesan: {e}")
 
 # Estetika Plot Global
 plt.rcParams.update({
@@ -48,44 +50,14 @@ plt.rcParams.update({
 sns.set_style('whitegrid')
 
 # ==============================================================================
-# FUNGSI HELPER PEREKAMAN (Diadaptasi dari 1_thread_logger.py)
+# DETEKSI HARDWARE KLIEN
 # ==============================================================================
-def deteksi_arsitektur():
-    thread_logis = psutil.cpu_count(logical=True)
-    core_fisik = psutil.cpu_count(logical=False)
-    if core_fisik is None: core_fisik = thread_logis
-    return core_fisik, thread_logis
-
-def inisialisasi_csv(filepath, jumlah_thread):
-    os.makedirs(os.path.dirname(filepath), exist_ok=True)
-    header = ["Timestamp", "Testing_Phase", "CPU_Total_Persen", "Memory_Usage_MB"] + [f"Thread_{i}" for i in range(jumlah_thread)]
-    
-    if not os.path.isfile(filepath):
-        with open(filepath, mode="w", newline="", encoding="utf-8") as f:
-            csv.writer(f).writerow(header)
-    else:
-        # Check jika kosong
-        with open(filepath, mode="r", encoding="utf-8") as f:
-            header_lama = next(csv.reader(f), None)
-        if header_lama is None:
-            with open(filepath, mode="w", newline="", encoding="utf-8") as f:
-                csv.writer(f).writerow(header)
-
-def rekam_satu_baris(fase, jumlah_thread):
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    cpu_total = psutil.cpu_percent(interval=None)
-    cpu_per_thread = psutil.cpu_percent(percpu=True)
-    
-    if len(cpu_per_thread) != jumlah_thread:
-        cpu_per_thread = (cpu_per_thread + [0.0] * jumlah_thread)[:jumlah_thread]
-        
-    memory = psutil.virtual_memory()
-    memory_mb = round(memory.used / (1024 * 1024), 2)
-    return [timestamp, fase, cpu_total, memory_mb] + cpu_per_thread
-
-def tulis_ke_csv(filepath, baris):
-    with open(filepath, mode="a", newline="", encoding="utf-8") as f:
-        csv.writer(f).writerow(baris)
+client_hw = hw_detector()
+client_cores = "Unknown"
+client_ram = "Unknown"
+if client_hw:
+    client_cores = client_hw.get("cores", "Unknown")
+    client_ram = client_hw.get("memory", "Unknown")
 
 # ==============================================================================
 # UI SIDEBAR
@@ -93,128 +65,64 @@ def tulis_ke_csv(filepath, baris):
 st.sidebar.title("📊 Multi-Thread Eval")
 menu = st.sidebar.radio(
     "Navigasi",
-    ["1️⃣ Perekaman Data", "2️⃣ Pemrosesan & ML", "3️⃣ Dashboard Evaluasi"]
+    ["1️⃣ Unggah & Proses Data", "2️⃣ Dashboard Evaluasi"]
 )
 st.sidebar.markdown("---")
 st.sidebar.info("Sistem Evaluasi Optimalisasi Multi-Threading Spesifik pada Aplikasi Web.")
 
-# ==============================================================================
-# HALAMAN 1: PEREKAMAN DATA
-# ==============================================================================
-if menu == "1️⃣ Perekaman Data":
-    st.header("🔴 Perekaman Data Thread CPU")
-    st.markdown("Rekam beban CPU per-logical-thread dalam durasi tertentu.")
-    
-    core_fisik, jumlah_thread = deteksi_arsitektur()
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.info(f"**Arsitektur CPU:** {core_fisik} Core / {jumlah_thread} Logical Thread")
-    with col2:
-        ram_gb = round(psutil.virtual_memory().total / (1024**3), 1)
-        st.info(f"**Total RAM:** {ram_gb} GB")
-        
-    st.divider()
-    
-    with st.form("form_rekam"):
-        fase = st.text_input("Label Fase Pengujian (contoh: 'Proses Transaksi')", value="Idle_Web")
-        durasi = st.number_input("Durasi Perekaman (detik)", min_value=5, max_value=3600, value=30, step=5)
-        submitted = st.form_submit_button("Mulai Merekam", type="primary")
-        
-    if submitted:
-        fase_label = fase.strip() if fase.strip() else "Tidak_Berlabel"
-        inisialisasi_csv(RAW_CSV, jumlah_thread)
-        psutil.cpu_percent(percpu=True) # First call is 0
-        
-        st.success(f"Memulai perekaman untuk fase **'{fase_label}'** selama {durasi} detik...")
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        metrik_cols = st.columns(4)
-        m_cpu = metrik_cols[0].empty()
-        m_ram = metrik_cols[1].empty()
-        m_max = metrik_cols[2].empty()
-        m_imb = metrik_cols[3].empty()
-        
-        for i in range(durasi):
-            time.sleep(1)
-            baris = rekam_satu_baris(fase_label, jumlah_thread)
-            tulis_ke_csv(RAW_CSV, baris)
-            
-            # Update UI
-            progress = (i + 1) / durasi
-            progress_bar.progress(progress)
-            status_text.text(f"Detik ke-{i+1} / {durasi} selesai dicatat.")
-            
-            cpu_tot = baris[2]
-            ram_tot = baris[3]
-            threads = baris[4:]
-            t_max = max(threads) if threads else 0
-            t_min = min(threads) if threads else 0
-            imb = round(t_max - t_min, 1)
-            
-            m_cpu.metric("Total CPU (%)", f"{cpu_tot}%")
-            m_ram.metric("RAM Terpakai", f"{ram_tot} MB")
-            m_max.metric("Max Thread Load", f"{t_max}%")
-            m_imb.metric("Imbalance (Δ)", f"{imb}%")
-            
-        st.success(f"✅ Perekaman selesai! Data tersimpan di `{RAW_CSV}`")
+st.sidebar.markdown("### Spesifikasi Perangkat Klien")
+st.sidebar.write(f"**Logical Cores:** {client_cores}")
+st.sidebar.write(f"**RAM:** {client_ram} GB (approx)")
 
 # ==============================================================================
-# HALAMAN 2: PEMROSESAN & ML
+# HALAMAN 1: UNGGAH & PROSES DATA
 # ==============================================================================
-elif menu == "2️⃣ Pemrosesan & ML":
-    st.header("⚙️ Data Preprocessing & Machine Learning")
-    st.markdown("Bersihkan data mentah, buat fitur turunan, dan jalankan K-Means serta Isolation Forest.")
+if menu == "1️⃣ Unggah & Proses Data":
+    st.header("📤 Unggah Data Rekaman Thread CPU")
+    st.markdown("Unggah file `thread_performance_log.csv` Anda untuk diproses.")
     
-    st.info(f"**File Mentah:** `{RAW_CSV}`\n\n**Output Final:** `{ML_CSV}`")
+    uploaded_file = st.file_uploader("Pilih file CSV", type="csv")
     
-    if st.button("▶️ Jalankan Pipeline Preprocessing & ML", type="primary"):
-        if not os.path.exists(RAW_CSV):
-            st.error("Data mentah belum ada. Lakukan perekaman data terlebih dahulu.")
-        else:
-            with st.spinner("Menjalankan 2_data_preprocessing.py ..."):
-                # Jalankan skrip preprocessing
-                script1 = os.path.join(BASE_DIR, "2_data_preprocessing.py")
-                res1 = subprocess.run([sys.executable, script1], capture_output=True, text=True)
+    if uploaded_file is not None:
+        try:
+            df = pd.read_csv(uploaded_file, encoding='utf-8')
+            st.success("File berhasil diunggah!")
+            
+            with st.spinner("Membersihkan data & membuat fitur turunan..."):
+                kolom_thread = prep.identifikasi_kolom_thread(df)
+                df = prep.bersihkan_data(df, kolom_thread)
+                df = prep.buat_fitur_turunan(df, kolom_thread)
+            
+            with st.spinner("Menjalankan Machine Learning Analysis..."):
+                kolom_fitur, fitur_scaled = ml.siapkan_fitur(df, kolom_thread)
+                df = ml.jalankan_kmeans(df, fitur_scaled, kolom_thread)
+                df = ml.jalankan_isolation_forest(df, fitur_scaled)
                 
-            if res1.returncode != 0:
-                st.error("Gagal saat menjalankan Data Preprocessing.")
-                st.code(res1.stderr)
-            else:
-                with st.expander("✅ Log Preprocessing", expanded=False):
-                    st.code(res1.stdout)
-                
-                with st.spinner("Menjalankan 3_ml_analysis.py ..."):
-                    script2 = os.path.join(BASE_DIR, "3_ml_analysis.py")
-                    res2 = subprocess.run([sys.executable, script2], capture_output=True, text=True)
-                    
-                if res2.returncode != 0:
-                    st.error("Gagal saat menjalankan Machine Learning Analysis.")
-                    st.code(res2.stderr)
-                else:
-                    with st.expander("✅ Log ML Analysis", expanded=True):
-                        st.code(res2.stdout)
-                    st.success("Pipeline berhasil diselesaikan! Silakan buka halaman **Dashboard Evaluasi**.")
+            st.session_state['ml_df'] = df
+            st.session_state['kolom_thread'] = kolom_thread
+            st.success("Pemrosesan & ML selesai! Silakan buka halaman **Dashboard Evaluasi**.")
+            
+            with st.expander("Lihat Sampel Data Hasil Pemrosesan"):
+                st.dataframe(df.head())
+        except Exception as e:
+            st.error(f"Terjadi kesalahan saat memproses data: {e}")
 
 # ==============================================================================
-# HALAMAN 3: DASHBOARD EVALUASI
+# HALAMAN 2: DASHBOARD EVALUASI
 # ==============================================================================
-elif menu == "3️⃣ Dashboard Evaluasi":
+elif menu == "2️⃣ Dashboard Evaluasi":
     st.header("📈 Dashboard Evaluasi Multi-Threading")
     
-    if not os.path.exists(ML_CSV):
-        st.warning("Data Machine Learning belum tersedia. Jalankan pipeline di menu **Pemrosesan & ML** terlebih dahulu.")
+    if 'ml_df' not in st.session_state:
+        st.warning("Data belum tersedia. Unggah dan proses data di menu **Unggah & Proses Data** terlebih dahulu.")
     else:
-        df = pd.read_csv(ML_CSV, encoding='utf-8')
+        df = st.session_state['ml_df']
+        kolom_thread = st.session_state['kolom_thread']
+        
         if 'Timestamp' in df.columns:
             df['Timestamp'] = pd.to_datetime(df['Timestamp'], errors='coerce')
         
-        kolom_thread = sorted(
-            [col for col in df.columns if col.startswith('Thread_') and col.split('_')[1].isdigit()],
-            key=lambda x: int(x.split('_')[1])
-        )
-        
-        core_fisik, jumlah_thread = deteksi_arsitektur()
+        jumlah_thread = len(kolom_thread)
         
         # ── Hitung Metrik Utama ──
         total_data = len(df)
@@ -236,9 +144,7 @@ elif menu == "3️⃣ Dashboard Evaluasi":
         st.markdown("---")
         
         if mode_awam:
-            # ==============================================================================
             # TAMPILAN MODE AWAM
-            # ==============================================================================
             st.subheader("💡 Kesimpulan Cepat Sistem Anda")
             
             col_score, col_badge = st.columns(2)
@@ -264,14 +170,12 @@ elif menu == "3️⃣ Dashboard Evaluasi":
             else:
                 rekomendasi = "Sistem Anda sangat efisien mendistribusikan beban secara merata pada banyak thread! Sangat direkomendasikan untuk **'Render / Server'** atau menjalankan aplikasi dengan beban asinkron tinggi."
                 
-            st.info(f"**Arsitektur Saat Ini:** {core_fisik} Core / {jumlah_thread} Thread\n\n**Rekomendasi:** {rekomendasi}")
+            st.info(f"**Rekomendasi:** {rekomendasi}")
             
             st.caption("Matikan **Mode Awam** di atas untuk melihat rincian grafik statistik performa.")
             
         else:
-            # ==============================================================================
             # TAMPILAN MODE EXPERT
-            # ==============================================================================
             col1, col2, col3, col4 = st.columns(4)
             col1.metric("Total Data (Detik)", f"{total_data}", 
                         help="Jumlah rekaman observasi (1 detik per rekaman).")
@@ -378,4 +282,3 @@ elif menu == "3️⃣ Dashboard Evaluasi":
                 * **Boxplot Distribusi:** Idealnya, semua kotak untuk setiap thread berada di tingkat yang sama. Jika satu kotak (thread) jauh lebih tinggi/panjang ke atas daripada yang lain, itu indikasi kuat adanya *Bottleneck*!
                 * **Heatmap Klaster K-Means:** Menunjukkan proporsi waktu CPU Anda di fase tersebut. 'Beban Merata' (gelap di kolom Beban Merata) berarti aplikasi sangat dioptimalkan untuk *Multi-threading*.
                 """)
-

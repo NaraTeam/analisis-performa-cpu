@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Hardware Detector</title>
+    <!-- Streamlit component API -->
+    <script>
+      function sendMessageToStreamlitClient(type, data) {
+        const outData = Object.assign({
+          isStreamlitMessage: true,
+          type: type,
+        }, data);
+        window.parent.postMessage(outData, "*");
+      }
+
+      function init() {
+        sendMessageToStreamlitClient("streamlit:componentReady", {apiVersion: 1});
+      }
+
+      function setFrameHeight(height) {
+        sendMessageToStreamlitClient("streamlit:setFrameHeight", {height: height});
+      }
+
+      function sendData() {
+        const data = {
+          cores: navigator.hardwareConcurrency || null,
+          memory: navigator.deviceMemory || null
+        };
+        sendMessageToStreamlitClient("streamlit:setComponentValue", {value: data});
+      }
+
+      window.addEventListener("message", function(event) {
+        if (event.data.type === "streamlit:render") {
+          setFrameHeight(0); // Hide the component frame
+          sendData();
+        }
+      });
+
+      window.addEventListener("load", init);
+    </script>
+  </head>
+  <body>
+  </body>
+</html>

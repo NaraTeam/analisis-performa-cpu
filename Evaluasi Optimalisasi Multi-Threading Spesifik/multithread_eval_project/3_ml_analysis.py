@@ -55,26 +55,21 @@ RANDOM_STATE = 42
 def muat_data(filepath):
     """Membaca dataset_bersih.csv dan melakukan validasi dasar."""
     if not os.path.isfile(filepath):
-        print(f"[ERROR] File tidak ditemukan: {filepath}")
-        print("  -> Jalankan 2_data_preprocessing.py terlebih dahulu.")
-        sys.exit(1)
+        raise ValueError(f"[ERROR] File tidak ditemukan: {filepath}\n  -> Jalankan 2_data_preprocessing.py terlebih dahulu.")
 
     try:
         df = pd.read_csv(filepath, encoding="utf-8")
     except Exception as e:
-        print(f"[ERROR] Gagal membaca CSV: {e}")
-        sys.exit(1)
+        raise ValueError(f"[ERROR] Gagal membaca CSV: {e}")
 
     if df.empty:
-        print("[ERROR] Dataset kosong. Tidak ada data untuk dianalisis.")
-        sys.exit(1)
+        raise ValueError("[ERROR] Dataset kosong. Tidak ada data untuk dianalisis.")
 
     if len(df) < KMEANS_K:
-        print(
+        raise ValueError(
             f"[ERROR] Dataset terlalu kecil ({len(df)} baris). "
             f"Diperlukan minimal {KMEANS_K} baris untuk K-Means Clustering."
         )
-        sys.exit(1)
 
     print(f"[INFO] Dataset dimuat: {df.shape[0]} baris x {df.shape[1]} kolom")
     return df
@@ -89,8 +84,7 @@ def identifikasi_kolom_thread(df):
     key=lambda x: int(x.split("_")[1])
 )
     if not kolom:
-        print("[ERROR] Tidak ditemukan kolom 'Thread_X' dalam dataset.")
-        sys.exit(1)
+        raise ValueError("[ERROR] Tidak ditemukan kolom 'Thread_X' dalam dataset.")
 
     print(f"[INFO] Thread terdeteksi: {len(kolom)} "
           f"({kolom[0]} s/d {kolom[-1]})")

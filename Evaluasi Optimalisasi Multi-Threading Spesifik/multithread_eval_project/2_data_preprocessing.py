@@ -50,22 +50,17 @@ def muat_data(filepath):
     Melakukan validasi keberadaan file dan isi minimal.
     """
     if not os.path.isfile(filepath):
-        print(f"[ERROR] File tidak ditemukan: {filepath}")
-        print("  -> Jalankan 1_thread_logger.py terlebih dahulu untuk merekam data.")
-        sys.exit(1)
+        raise ValueError(f"[ERROR] File tidak ditemukan: {filepath}\n  -> Jalankan 1_thread_logger.py terlebih dahulu untuk merekam data.")
 
     try:
         df = pd.read_csv(filepath, encoding="utf-8")
     except pd.errors.EmptyDataError:
-        print("[ERROR] File CSV kosong (hanya header atau benar-benar kosong).")
-        sys.exit(1)
+        raise ValueError("[ERROR] File CSV kosong (hanya header atau benar-benar kosong).")
     except Exception as e:
-        print(f"[ERROR] Gagal membaca CSV: {e}")
-        sys.exit(1)
+        raise ValueError(f"[ERROR] Gagal membaca CSV: {e}")
 
     if df.empty:
-        print("[ERROR] Tidak ada baris data di dalam CSV.")
-        sys.exit(1)
+        raise ValueError("[ERROR] Tidak ada baris data di dalam CSV.")
 
     print(f"[INFO] Data mentah dimuat: {df.shape[0]} baris x {df.shape[1]} kolom")
     return df
@@ -81,9 +76,7 @@ def identifikasi_kolom_thread(df):
     kolom_thread = [col for col in df.columns if col.startswith("Thread_")]
 
     if not kolom_thread:
-        print("[ERROR] Tidak ditemukan kolom 'Thread_X' di dataset.")
-        print(f"  Kolom yang ada: {list(df.columns)}")
-        sys.exit(1)
+        raise ValueError(f"[ERROR] Tidak ditemukan kolom 'Thread_X' di dataset.\n  Kolom yang ada: {list(df.columns)}")
 
     # Urutan numerik yang benar
     kolom_thread.sort(key=lambda x: int(x.split("_")[1]))
