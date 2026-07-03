@@ -23,6 +23,11 @@ st.set_page_config(
 )
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+if not os.path.exists(os.path.join(BASE_DIR, "2_data_preprocessing.py")):
+    PROJECT_DIR = os.path.join(BASE_DIR, "Evaluasi Optimalisasi Multi-Threading Spesifik", "multithread_eval_project")
+    if os.path.exists(os.path.join(PROJECT_DIR, "2_data_preprocessing.py")):
+        BASE_DIR = PROJECT_DIR
+
 DATA_DIR = os.path.join(BASE_DIR, "data")
 RAW_CSV = os.path.join(DATA_DIR, "thread_performance_log.csv")
 CLEAN_CSV = os.path.join(DATA_DIR, "dataset_bersih.csv")
